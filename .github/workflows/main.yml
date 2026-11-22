@@ -133,10 +133,21 @@ jobs:
         run: |
           set -euo pipefail
 
+          # GitHub blocks the default GITHUB_TOKEN from changing workflow files.
+          # Preserve the currently running Actions definitions and replace the
+          # application source and project files from the release archive.
+          mkdir -p /tmp/njol-preserved-workflows
+          if [[ -d .github/workflows ]]; then
+            cp -a .github/workflows/. /tmp/njol-preserved-workflows/
+          fi
+
           # Delete the current working-tree contents except .git.
           # This does not rewrite history; the backup branch above preserves the old tree.
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
           cp -a /tmp/njol-new-root/. .
+
+          mkdir -p .github/workflows
+          cp -a /tmp/njol-preserved-workflows/. .github/workflows/
 
           test -f LICENSE
           test -f README.md
