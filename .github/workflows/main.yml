@@ -1,10 +1,10 @@
-name: Import Source Code from ZIP
+name: Import Source Code from Gofile
 
 on:
   workflow_dispatch:
     inputs:
-      zip_url:
-        description: 'URL to the ZIP file with source code'
+      gofile_content_id:
+        description: 'Gofile Content ID (e.g., cxNWOj60)'
         required: true
         type: string
 
@@ -19,25 +19,38 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download ZIP file
+      - name: Download ZIP from Gofile
+        env:
+          GOFILE_TOKEN: ${{ secrets.GOFILE_TOKEN }}
+          CONTENT_ID: ${{ github.event.inputs.gofile_content_id }}
         run: |
-          echo "Скачиваем архив..."
-          curl -L -o source.zip "${{ github.event.inputs.zip_url }}"
+          echo "Получаем информацию о файле..."
+          API_RESPONSE=$(curl -s -H "Authorization: Bearer $GOFILE_TOKEN" "https://api.gofile.io/contents/$CONTENT_ID")
           
-          # Проверка, что скачался именно архив, а не HTML-страница
+          # Извлекаем прямую ссылку (поле downloadPage или аналогичное)
+          DOWNLOAD_URL=$(echo "$API_RESPONSE" | jq -r '.data.downloadPage // .data.directLink // empty')
+          
+          if [ -z "$DOWNLOAD_URL" ]; then
+            echo "Не удалось получить ссылку. Ответ API:"
+            echo "$API_RESPONSE"
+            exit 1
+          fi
+
+          echo "Скачиваем архив..."
+          curl -L -o source.zip "$DOWNLOAD_URL"
+          
           if ! file source.zip | grep -q "Zip archive"; then
-            echo "ОШИБКА: Скачанный файл не является ZIP-архивом. Возможно, ссылка требует авторизации."
+            echo "ОШИБКА: Файл не является ZIP-архивом."
             exit 1
           fi
 
       - name: Extract ZIP file
         run: |
-          echo "Распаковываем архив..."
           unzip -o source.zip -d .
           rm source.zip
-          
+
       - name: Commit and Push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Import source code from ZIP archive"
+          commit_message: "Import source code from Gofile ZIP"
           branch: main
