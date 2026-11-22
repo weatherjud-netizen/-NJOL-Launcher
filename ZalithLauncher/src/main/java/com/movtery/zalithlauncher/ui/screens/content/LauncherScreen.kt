@@ -18,6 +18,7 @@
 
 package com.movtery.zalithlauncher.ui.screens.content
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.combinedClickable
@@ -52,6 +53,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.ui.window.Dialog
 import androidx.compose.runtime.Composable
@@ -100,6 +102,7 @@ import com.movtery.zalithlauncher.game.account.AccountsManager
 import com.movtery.zalithlauncher.game.version.installed.PlayTimeRepository
 import com.movtery.zalithlauncher.game.version.installed.Version
 import com.movtery.zalithlauncher.game.version.installed.VersionsManager
+import com.movtery.zalithlauncher.setting.AllSettings
 import com.movtery.zalithlauncher.ui.base.BaseScreen
 import com.movtery.zalithlauncher.ui.components.BackgroundCard
 import com.movtery.zalithlauncher.ui.components.MarkdownView
@@ -118,6 +121,7 @@ import com.movtery.zalithlauncher.ui.screens.content.elements.AboutDialog
 import com.movtery.zalithlauncher.ui.screens.content.elements.SideBar
 import com.movtery.zalithlauncher.ui.screens.content.elements.VersionIconImage
 import com.movtery.zalithlauncher.ui.screens.content.help.HelpCenterDialog
+import com.movtery.zalithlauncher.ui.screens.content.help.HelpTopic
 import com.movtery.zalithlauncher.ui.screens.game.elements.PerformanceSettingsDialog
 import com.movtery.zalithlauncher.ui.screens.game.elements.PerformanceSettingsOperation
 import com.movtery.zalithlauncher.ui.screens.main.custom_home.MarkdownBlock
@@ -148,13 +152,44 @@ fun LauncherScreen(
     ) { isVisible ->
         var showAboutDialog by remember { mutableStateOf(false) }
         var showHelp by remember { mutableStateOf(false) }
+        var helpTopic by remember { mutableStateOf<HelpTopic?>(null) }
+        var showNjolOnboarding by remember { mutableStateOf(!AllSettings.njolOnboardingCompleted.state) }
+        var showPreflight by remember { mutableStateOf(false) }
+        var pendingLaunchVersion by remember { mutableStateOf<Version?>(null) }
+        var crashNotice by remember { mutableStateOf(AllSettings.njolLastCrashNotice.state) }
         var performanceSettingsState by remember { mutableStateOf<PerformanceSettingsOperation>(PerformanceSettingsOperation.None) }
 
         if (showAboutDialog) {
             AboutDialog(onDismissRequest = { showAboutDialog = false })
         }
         if (showHelp) {
-            HelpCenterDialog(onDismissRequest = { showHelp = false }, openLink = onOpenLink)
+            HelpCenterDialog(
+                onDismissRequest = { showHelp = false; helpTopic = null },
+                initialTopic = helpTopic,
+                openLink = onOpenLink
+            )
+        }
+        if (showNjolOnboarding) {
+            NjolOnboardingDialog(
+                onDismissRequest = {
+                    AllSettings.njolOnboardingCompleted.save(true)
+                    showNjolOnboarding = false
+                }
+            )
+        }
+        if (showPreflight) {
+            NjolPreflightDialog(
+                onDismissRequest = {
+                    showPreflight = false
+                    pendingLaunchVersion = null
+                },
+                onContinue = {
+                    showPreflight = false
+                    val version = pendingLaunchVersion
+                    pendingLaunchVersion = null
+                    onLaunchGame(version)
+                }
+            )
         }
 
         PerformanceSettingsDialog(
@@ -207,7 +242,14 @@ fun LauncherScreen(
                     onNavigateToStats = onNavigateToStats,
                     onNavigateToPlayTimeStats = onNavigateToPlayTimeStats,
                     onNavigateToLog = onNavigateToLog,
-                    onProjectClick = { showHelp = true }
+                    onProjectClick = { helpTopic = null; showHelp = true },
+                    crashNotice = crashNotice,
+                    onDismissCrashNotice = {
+                        AllSettings.njolLastCrashNotice.save("")
+                        crashNotice = ""
+                    },
+                    onOpenOnboarding = { showNjolOnboarding = true },
+                    onOpenCreatorLab = { helpTopic = HelpTopic.CREATOR_LAB; showHelp = true }
                 )
             }
 
@@ -233,7 +275,14 @@ fun LauncherScreen(
                     .weight(3f)
                     .fillMaxHeight()
                     .padding(top = 12.dp, end = 12.dp, bottom = 12.dp),
-                onLaunchGame = onLaunchGame,
+                onLaunchGame = { version ->
+                    if (AllSettings.njolPreflightEnabled.state) {
+                        pendingLaunchVersion = version
+                        showPreflight = true
+                    } else {
+                        onLaunchGame(version)
+                    }
+                },
                 toAccountManageScreen = toAccountManageScreen,
                 toVersionManageScreen = toVersionManageScreen,
                 toVersionSettingsScreen = toVersionSettingsScreen,
@@ -251,6 +300,10 @@ private fun ContentMenu(
     onNavigateToPlayTimeStats: () -> Unit = {},
     onNavigateToLog: (String) -> Unit,
     onProjectClick: () -> Unit,
+    crashNotice: String,
+    onDismissCrashNotice: () -> Unit,
+    onOpenOnboarding: () -> Unit,
+    onOpenCreatorLab: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val yOffset by swapAnimateDpAsState(
@@ -297,7 +350,17 @@ private fun ContentMenu(
             }
         }
 
+        if (crashNotice.isNotBlank()) {
+            item {
+                NjolCrashNoticeCard(
+                    notice = crashNotice,
+                    onDismiss = onDismissCrashNotice
+                )
+            }
+        }
         item { ProjectBanner(onClick = onProjectClick) }
+        item { CreatorLabCard(onClick = onOpenCreatorLab) }
+        item { NjolControlCard(onOpenOnboarding = onOpenOnboarding) }
         item {
             StatsGrid(
                 modifier = Modifier.fillMaxWidth().height(300.dp),
@@ -337,6 +400,216 @@ private fun ContentMenu(
                     config = config,
                     onEvent = onHomePageEvent
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NjolControlCard(onOpenOnboarding: () -> Unit) {
+    var reduceMotion by remember { mutableStateOf(AllSettings.njolReduceMotion.state) }
+    var preflight by remember { mutableStateOf(AllSettings.njolPreflightEnabled.state) }
+    BackgroundCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("NJOL CONTROL", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp)
+            Text("Готовим запуск без сюрпризов", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Здесь только реальные локальные проверки: версия Android, память и состояние конфигурации. Лаунчер ничего не оптимизирует автоматически.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.alpha(0.78f)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Reduce Motion", style = MaterialTheme.typography.bodyMedium)
+                    Text("Отключить переходы и лишние эффекты", style = MaterialTheme.typography.bodySmall, modifier = Modifier.alpha(0.68f))
+                }
+                Switch(
+                    checked = reduceMotion,
+                    onCheckedChange = {
+                        reduceMotion = it
+                        AllSettings.njolReduceMotion.save(it)
+                    }
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Preflight перед запуском", style = MaterialTheme.typography.bodyMedium)
+                    Text("Показать краткую диагностику устройства", style = MaterialTheme.typography.bodySmall, modifier = Modifier.alpha(0.68f))
+                }
+                Switch(
+                    checked = preflight,
+                    onCheckedChange = {
+                        preflight = it
+                        AllSettings.njolPreflightEnabled.save(it)
+                    }
+                )
+            }
+            Button(onClick = onOpenOnboarding, modifier = Modifier.fillMaxWidth()) {
+                Text("Открыть знакомство с NJOL")
+            }
+        }
+    }
+}
+
+@Composable
+private fun NjolCrashNoticeCard(
+    notice: String,
+    onDismiss: () -> Unit,
+) {
+    BackgroundCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("NJOL CRASH INSIGHT", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp, color = MaterialTheme.colorScheme.error)
+            Text("Последний запуск завершился с ошибкой", style = MaterialTheme.typography.titleMedium)
+            Text(notice, style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Подсказка основана только на локальном crash-log и списке модов текущей игры. Это рекомендация, а не доказательство единственной причины.",
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.alpha(0.7f)
+            )
+            Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text("Понятно")
+            }
+        }
+    }
+}
+
+@Composable
+private fun NjolPreflightDialog(
+    onDismissRequest: () -> Unit,
+    onContinue: () -> Unit,
+) {
+    val runtime = Runtime.getRuntime()
+    val availableRamMb = runtime.maxMemory() / (1024 * 1024)
+    Dialog(onDismissRequest = onDismissRequest) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.9f),
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("NJOL PREFLIGHT", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2.sp)
+                Text("Проверка перед запуском", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Это сводка доступных системных данных, а не автоматическая оптимизация.", style = MaterialTheme.typography.bodyMedium)
+                Text("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                Text("Лимит памяти процесса: ${availableRamMb} МБ")
+                Text("Preflight не сканирует файлы, миры или моды перед запуском. Анализ модов выполняется только после игрового краша и только в папке текущей игры.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.alpha(0.72f))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onDismissRequest, modifier = Modifier.weight(1f)) {
+                        Text("Отмена")
+                    }
+                    Button(onClick = onContinue, modifier = Modifier.weight(1f)) {
+                        Text("Продолжить")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NjolOnboardingDialog(onDismissRequest: () -> Unit) {
+    var page by remember { mutableStateOf(0) }
+    val titles = listOf("Добро пожаловать в NJOL", "Ваши версии и аккаунты на месте", "Контроль вместо магии")
+    val descriptions = listOf(
+        "NapoleJavaON Launcher сохраняет привычный офлайн-режим и поддержку игровых загрузчиков, но добавляет понятный фирменный интерфейс.",
+        "Управляйте версиями, Java, рендерами и аккаунтами как раньше. NJOL не удаляет данные и не меняет их автоматически.",
+        "Preflight показывает только доступные сведения устройства. Performance Lab даёт рекомендации, а не применяет рискованные оптимизации без вашего решения."
+    )
+    Dialog(onDismissRequest = onDismissRequest) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.9f),
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Text("NJOL  /  1.0", style = MaterialTheme.typography.labelSmall, letterSpacing = 1.3.sp)
+                Text(titles[page], style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text(descriptions[page], style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.alpha(0.65f)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    repeat(titles.size) { index ->
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (index == page) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant)
+                        )
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onDismissRequest, modifier = Modifier.weight(1f)) {
+                        Text("Пропустить")
+                    }
+                    Button(
+                        onClick = {
+                            if (page == titles.lastIndex) onDismissRequest() else page++
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(if (page == titles.lastIndex) "Готово" else "Далее")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CreatorLabCard(onClick: () -> Unit) {
+    BackgroundCard(
+        modifier = Modifier.fillMaxWidth().height(154.dp),
+        shape = RoundedCornerShape(22.dp),
+        onClick = onClick
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Image(
+                painter = painterResource(R.drawable.njol_creator_lab),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.horizontalGradient(
+                        0f to Color.Black.copy(alpha = 0.92f),
+                        0.62f to Color.Black.copy(alpha = 0.48f),
+                        1f to Color.Transparent
+                    )
+                )
+            )
+            Column(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("NJOL  /  CREATOR LAB", color = Color.White.copy(alpha = 0.78f), style = MaterialTheme.typography.labelSmall, letterSpacing = 1.3.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Создавай моды для Minecraft Java", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Termux или GitHub + AI — пошаговый маршрут внутри NJOL", color = Color.White.copy(alpha = 0.82f), style = MaterialTheme.typography.bodySmall)
+                }
+                Text("Открыть Creator Lab →", color = Color.White, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
         }
     }

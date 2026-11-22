@@ -52,6 +52,7 @@ enum class HelpTopic(@StringRes val title: Int, @StringRes val body: Int) {
     MODS(R.string.help_mods_title, R.string.help_mods_body),
     ACCOUNTS(R.string.help_accounts_title, R.string.help_accounts_body),
     PLUGINS(R.string.help_plugins_title, R.string.help_plugins_body),
+    CREATOR_LAB(R.string.help_creator_lab_title, R.string.help_creator_lab_body),
     CONTROLS(R.string.help_controls_title, R.string.help_controls_body),
     LOGS(R.string.help_logs_title, R.string.help_logs_body),
     LEGAL(R.string.help_legal_title, R.string.help_legal_body)
@@ -75,6 +76,13 @@ private fun links(topic: HelpTopic): List<HelpLink> = when (topic) {
     HelpTopic.PLUGINS -> listOf(
         HelpLink(R.string.help_link_native, "https://github.com/ZalithLauncher/NativeLibPlugin"),
         HelpLink(R.string.help_link_driver, "https://github.com/FCL-Team/FCLDriverPlugin")
+    )
+    HelpTopic.CREATOR_LAB -> listOf(
+        HelpLink(R.string.help_link_termux, "https://github.com/termux/termux-app"),
+        HelpLink(R.string.help_link_termux_fdroid, "https://f-droid.org/en/packages/com.termux/"),
+        HelpLink(R.string.help_link_github, "https://github.com/"),
+        HelpLink(R.string.help_link_codespaces, "https://docs.github.com/en/codespaces/about-codespaces/what-are-codespaces"),
+        HelpLink(R.string.help_link_fabric_docs, "https://docs.fabricmc.net/develop/")
     )
     HelpTopic.LEGAL -> listOf(
         HelpLink(R.string.help_link_license, "https://github.com/Star1xr/ZalithLauncher2Plus/blob/main/LICENSE"),

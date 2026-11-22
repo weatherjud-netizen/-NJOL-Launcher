@@ -27,6 +27,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
@@ -50,6 +51,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 
 private const val TAG = "SplashActivity"
@@ -67,21 +69,16 @@ const val IMPORT_TYPE_UNKNOWN = "unknown"
 @SuppressLint("CustomSplashScreen")
 @AndroidEntryPoint
 class SplashActivity : BaseAppCompatActivity() {
-    private val unpackItems: MutableList<InstallableItem> = ArrayList()
+    private val unpackItems = mutableStateListOf<InstallableItem>()
     private val finishedTaskCount = AtomicInteger(0)
+    @Volatile
+    private var preparationReady = false
 
     private val backStackViewModel: SplashBackStackViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
-
-        initUnpackItems()
-        checkAllTask()
-
-        if (checkTasksToMain()) {
-            return
-        }
 
         setContent {
             ZalithLauncherTheme {
@@ -97,6 +94,14 @@ class SplashActivity : BaseAppCompatActivity() {
                     )
                 }
             }
+        }
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                initUnpackItems()
+                checkAllTask()
+            }
+            preparationReady = true
+            checkTasksToMain()
         }
     }
 
@@ -205,6 +210,7 @@ class SplashActivity : BaseAppCompatActivity() {
     }
 
     private fun startAllTask() {
+        if (!preparationReady) return
         lifecycleScope.launch {
             val jobs = unpackItems
                 .filter {

@@ -47,8 +47,10 @@ import com.movtery.zalithlauncher.game.crash_analysis.CrashAnalyzer
 import com.movtery.zalithlauncher.game.crash_analysis.CrashContext
 import com.movtery.zalithlauncher.game.crash_analysis.CrashFiles
 import com.movtery.zalithlauncher.game.crash_analysis.CrashTip
+import com.movtery.zalithlauncher.game.crash_analysis.ModScanner
 import com.movtery.zalithlauncher.game.crash_analysis.Severity
 import com.movtery.zalithlauncher.path.PathManager
+import com.movtery.zalithlauncher.setting.AllSettings
 import com.movtery.zalithlauncher.ui.base.BaseAppCompatActivity
 import com.movtery.zalithlauncher.ui.screens.main.ErrorScreen
 import com.movtery.zalithlauncher.ui.screens.main.crashlogs.ShareLinkOperation
@@ -165,14 +167,38 @@ class ErrorActivity : BaseAppCompatActivity() {
                             jvmCrash.gameHome.takeIf { it.isNotBlank() }?.let(::File),
                             jvmCrash.sessionStartedAt
                         )
-                        CrashAnalyzer.analyze(CrashContext(
+                        val tips = CrashAnalyzer.analyze(CrashContext(
                             exitCode = jvmCrash.code,
                             isSignal = jvmCrash.isSignal,
                             logContent = inputs.log,
-                            reportContent = inputs.report
+                            reportContent = inputs.report,
+                            mods = jvmCrash.gameHome.takeIf { it.isNotBlank() }
+                                ?.let(ModScanner::scanMods).orEmpty()
                         ))
+                        tips.firstOrNull()?.let { tip ->
+                            AllSettings.njolLastCrashNotice.save(
+                                "${tip.title}: ${tip.solution.take(260)}"
+                            )
+                        }
+                        withContext(Dispatchers.Main) {
+                            startActivity(Intent(this@ErrorActivity, MainActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
+                            finish()
+                        }
+                        tips
                     } catch (_: Exception) {
-                        CrashAnalyzer.analyze(CrashContext(jvmCrash.code, jvmCrash.isSignal))
+                        val tips = CrashAnalyzer.analyze(CrashContext(jvmCrash.code, jvmCrash.isSignal))
+                        tips.firstOrNull()?.let { tip ->
+                            AllSettings.njolLastCrashNotice.save("${tip.title}: ${tip.solution.take(260)}")
+                        }
+                        withContext(Dispatchers.Main) {
+                            startActivity(Intent(this@ErrorActivity, MainActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
+                            finish()
+                        }
+                        tips
                     }
                 }
             }
@@ -239,7 +265,12 @@ class ErrorActivity : BaseAppCompatActivity() {
                         onRestartClick = {
                             ProcessPhoenix.triggerRebirth(this@ErrorActivity)
                         },
-                        onExitClick = { finish() },
+                        onExitClick = {
+                            startActivity(Intent(this@ErrorActivity, MainActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK)
+                            })
+                            finish()
+                        },
                         onOrientationChanged = {
                             this@ErrorActivity.requestedOrientation = it
                         },

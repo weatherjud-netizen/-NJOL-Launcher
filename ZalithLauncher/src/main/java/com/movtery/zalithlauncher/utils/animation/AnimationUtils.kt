@@ -54,7 +54,9 @@ fun getAdjustedDelayMillis(baseDelayMillis: Int): Int {
 /**
  * 页面切换动画是否关闭
  */
-fun isSwapAnimateClosed() = AllSettings.launcherSwapAnimateType.state == TransitionAnimationType.CLOSE
+fun isSwapAnimateClosed() =
+    AllSettings.njolReduceMotion.state ||
+        AllSettings.launcherSwapAnimateType.state == TransitionAnimationType.CLOSE
 
 fun <E> getAnimateTween(
     delayMillis: Int = 0

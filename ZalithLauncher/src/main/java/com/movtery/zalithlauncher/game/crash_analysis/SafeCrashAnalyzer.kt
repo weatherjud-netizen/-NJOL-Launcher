@@ -27,6 +27,12 @@ object CrashAnalyzer {
         val legacyTitles = LegacyCrashAnalyzer.analyze(
             context.copy(logContent = text, mods = emptyList())
         ).mapTo(mutableSetOf()) { it.title }
+        val knownMods = context.mods.associateBy { it.id.lowercase() }
+        fun modLabel(id: String): String {
+            val mod = knownMods[id.lowercase()]
+            return if (mod == null || mod.name.equals(id, ignoreCase = true)) id
+            else "${mod.name} ($id, ${mod.version})"
+        }
 
         // A mod ID is shown only when a loader explicitly associates it with a failure.
         // Installed mod names or mere co-existence are not evidence of incompatibility.
@@ -44,7 +50,7 @@ object CrashAnalyzer {
             }
         }
         incompatibleIds.take(4).forEach { id ->
-            tip("Несовместимость или зависимость мода: $id",
+            tip("Несовместимость или зависимость мода: ${modLabel(id)}",
                 "Загрузчик явно указал этот ID мода в сообщении о несовместимости или неудовлетворённой зависимости. Это обнаруженный признак, а не гарантия единственной причины сбоя.",
                 "Проверьте требования именно этой версии мода, Minecraft и загрузчика; при необходимости вручную установите совместимую версию или временно отключите мод после резервной копии.")
         }
@@ -62,7 +68,7 @@ object CrashAnalyzer {
             }
         }
         failedIds.filterNot { it in incompatibleIds }.take(4).forEach { id ->
-            tip("Ошибка при загрузке мода: $id",
+            tip("Ошибка при загрузке мода: ${modLabel(id)}",
                 "Отчёт или загрузчик связывает этот ID мода с ошибкой инициализации. Причиной может быть сам мод, его зависимость или окружение.",
                 "Сверьте версию мода и его зависимости с версией игры и загрузчика. Можно вручную временно отключить его для проверки, предварительно сохранив копию мира.")
         }

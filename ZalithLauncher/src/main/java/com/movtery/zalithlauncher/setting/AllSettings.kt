@@ -371,7 +371,7 @@ object AllSettings : SettingsRegistry() {
     //Launcher
     /**
      * 颜色主题色
-     * NJOL defaults to the neutral Urban Ash palette; saved choices are preserved.
+     * NJOL defaults to the violet graphite palette; saved choices are preserved.
      */
     val launcherColorTheme = enumSetting(
         "launcherColorTheme",
@@ -407,6 +407,21 @@ object AllSettings : SettingsRegistry() {
      * 持续型节日彩蛋效果
      */
     val launcherFestivalEffects = boolSetting("launcherFestivalEffects", true)
+
+    /** NJOL: reduce motion and decorative effects. */
+    val njolReduceMotion = boolSetting("njolReduceMotion", false)
+
+    /** NJOL: show the branded launch presentation. */
+    val njolLaunchPresentation = boolSetting("njolLaunchPresentation", true)
+
+    /** NJOL: first-run onboarding completion marker. */
+    val njolOnboardingCompleted = boolSetting("njolOnboardingCompleted", false)
+
+    /** NJOL: show a truthful preflight summary before launch. */
+    val njolPreflightEnabled = boolSetting("njolPreflightEnabled", true)
+
+    /** NJOL: short, non-sensitive summary shown after the last game crash. */
+    val njolLastCrashNotice = stringSetting("njolLastCrashNotice", "")
 
     /**
      * 动画倍速
