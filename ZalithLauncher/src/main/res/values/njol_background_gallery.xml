@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="njol_background_gallery_title">NJOL Gallery</string>
+    <string name="njol_background_gallery_summary">A built-in background for the launcher interface</string>
+    <string name="njol_background_gallery_image">NJOL background</string>
+    <string name="njol_background_gallery_description">Apply the built-in background or save it to your device. If it is hard to see, adjust the background element opacity.</string>
+    <string name="njol_background_gallery_apply">Apply</string>
+    <string name="njol_background_gallery_save">Save image</string>
+    <string name="njol_background_gallery_applied">Background applied</string>
+    <string name="njol_background_gallery_saved">Image saved</string>
+    <string name="njol_background_gallery_apply_error">Could not apply the background</string>
+    <string name="njol_background_gallery_save_error">Could not save the image</string>
+</resources>

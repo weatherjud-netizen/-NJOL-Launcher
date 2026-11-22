@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="njol_project_action">Open help and learn more</string>
+    <string name="njol_sidebar_expand">Expand shortcuts</string>
+    <string name="njol_sidebar_collapse">Collapse shortcuts</string>
+    <string name="njol_update_not_configured">The NJOL update channel is not configured yet. Another fork is not offered as an update.</string>
+</resources>

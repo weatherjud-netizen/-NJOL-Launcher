@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="njol_background_gallery_title">Галерея NJOL</string>
+    <string name="njol_background_gallery_summary">Встроенный фон для всего интерфейса лаунчера</string>
+    <string name="njol_background_gallery_image">Фон NJOL</string>
+    <string name="njol_background_gallery_description">Примените встроенный фон или сохраните его на устройство. Если фон плохо виден, настройте прозрачность фоновых элементов.</string>
+    <string name="njol_background_gallery_apply">Применить</string>
+    <string name="njol_background_gallery_save">Сохранить изображение</string>
+    <string name="njol_background_gallery_applied">Фон применён</string>
+    <string name="njol_background_gallery_saved">Изображение сохранено</string>
+    <string name="njol_background_gallery_apply_error">Не удалось применить фон</string>
+    <string name="njol_background_gallery_save_error">Не удалось сохранить изображение</string>
+</resources>

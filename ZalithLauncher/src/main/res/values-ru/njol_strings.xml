@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="njol_project_action">Открыть справку и узнать больше</string>
+    <string name="njol_sidebar_expand">Развернуть быстрые действия</string>
+    <string name="njol_sidebar_collapse">Свернуть быстрые действия</string>
+    <string name="njol_update_not_configured">Канал обновлений NJOL пока не настроен. APK другого форка не предлагается как обновление.</string>
+</resources>

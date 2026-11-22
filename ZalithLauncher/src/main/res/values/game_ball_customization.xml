@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game_ball_size">Menu button size</string>
+    <string name="game_ball_dock">Snap menu button to edge</string>
+    <string name="game_ball_dock_free">No snapping</string>
+    <string name="game_ball_dock_left">Left edge</string>
+    <string name="game_ball_dock_right">Right edge</string>
+    <string name="game_ball_dock_nearest">Nearest edge</string>
+    <string name="game_ball_description">Game menu; drag to move</string>
+</resources>

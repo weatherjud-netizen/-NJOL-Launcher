@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="game_ball_size">Размер кнопки меню</string>
+    <string name="game_ball_dock">Прилипание кнопки к краю</string>
+    <string name="game_ball_dock_free">Без прилипания</string>
+    <string name="game_ball_dock_left">К левому краю</string>
+    <string name="game_ball_dock_right">К правому краю</string>
+    <string name="game_ball_dock_nearest">К ближайшему краю</string>
+    <string name="game_ball_description">Игровое меню; перетащите, чтобы переместить</string>
+</resources>
