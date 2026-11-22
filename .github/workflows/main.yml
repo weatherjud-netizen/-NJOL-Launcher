@@ -146,6 +146,9 @@ jobs:
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
           cp -a /tmp/njol-new-root/. .
 
+          # The archive may contain its own workflow files. Remove them so the
+          # push does not try to create or update workflows with GITHUB_TOKEN.
+          rm -rf .github/workflows
           mkdir -p .github/workflows
           cp -a /tmp/njol-preserved-workflows/. .github/workflows/
 
