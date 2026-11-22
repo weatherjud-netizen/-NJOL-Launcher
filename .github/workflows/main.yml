@@ -1,153 +1,153 @@
-name: NJOL build and test release
+name: Replace repository root from release source
 
 on:
-  pull_request:
-  push:
-    tags:
-      - 'debug-v*'
   workflow_dispatch:
     inputs:
-      publish_release:
-        description: 'Create a GitHub prerelease from this commit'
+      release_tag:
+        description: 'Release tag, for example debug-v1-0.R2'
         required: true
-        default: false
-        type: boolean
+        default: 'debug-v1.0.R2'
+        type: string
+      source_asset:
+        description: 'Source ZIP asset name in that release'
+        required: true
+        default: 'NJOL-Source.zip'
+        type: string
+      confirmation:
+        description: 'Type REPLACE_ROOT to confirm replacing the current branch root'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
-concurrency:
-  group: njol-build-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  JAVA_VERSION: '17'
-  ANDROID_PLATFORM: 'platforms;android-37'
-  BUILD_TOOLS: 'build-tools;37.0.0'
-  NDK_VERSION: 'ndk;25.2.9519653'
-
 jobs:
-  build:
-    name: Build NJOL Debug APKs
+  replace-root:
+    name: Replace root from release source archive
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 30
+
     steps:
-      - name: Checkout exact source snapshot
+      - name: Check destructive-operation confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.confirmation }}" != "REPLACE_ROOT" ]]; then
+            echo '::error::Confirmation must be exactly REPLACE_ROOT.'
+            exit 1
+          fi
+
+      - name: Checkout current branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
-
-      - name: Install Android SDK, build tools and NDK
+      - name: Configure Git
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER="${ANDROID_HOME:?ANDROID_HOME is required}/cmdline-tools/latest/bin/sdkmanager"
-          test -x "$SDKMANAGER"
-          set +o pipefail
-          yes | "$SDKMANAGER" --licenses >/dev/null
-          set -o pipefail
-          "$SDKMANAGER" --install \
-            "$ANDROID_PLATFORM" \
-            "$BUILD_TOOLS" \
-            "$NDK_VERSION"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
 
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - name: Download source archive from the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_ASSET: ${{ inputs.source_asset }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/njol-source
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "$SOURCE_ASSET" \
+            --dir /tmp/njol-source
+          test -f "/tmp/njol-source/$SOURCE_ASSET"
 
-      - name: Build arm64 Debug APK and run unit tests
+      - name: Validate and extract archive safely
+        shell: bash
+        env:
+          SOURCE_ASSET: ${{ inputs.source_asset }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import os
+          import shutil
+          import zipfile
+          from pathlib import Path
+
+          archive = Path('/tmp/njol-source') / os.environ['SOURCE_ASSET']
+          extracted = Path('/tmp/njol-extracted')
+          extracted.mkdir(parents=True, exist_ok=True)
+
+          with zipfile.ZipFile(archive) as zf:
+              names = zf.namelist()
+              if not names:
+                  raise SystemExit('Source archive is empty')
+
+              for name in names:
+                  path = Path(name)
+                  if path.is_absolute() or '..' in path.parts:
+                      raise SystemExit(f'Unsafe archive path: {name}')
+
+              zf.extractall(extracted)
+
+          entries = [p for p in extracted.iterdir()]
+          if len(entries) == 1 and entries[0].is_dir():
+              source_root = entries[0]
+          else:
+              source_root = extracted
+
+          destination = Path('/tmp/njol-new-root')
+          destination.mkdir(parents=True, exist_ok=True)
+          for item in source_root.iterdir():
+              target = destination / item.name
+              if item.is_dir():
+                  shutil.copytree(item, target, dirs_exist_ok=True)
+              else:
+                  shutil.copy2(item, target)
+
+          required = ['LICENSE', 'README.md']
+          missing = [name for name in required if not (destination / name).exists()]
+          if missing:
+              raise SystemExit(f'Missing required source files: {missing}')
+
+          print('Validated source archive:', archive)
+          print('Prepared replacement root:', destination)
+          PY
+
+      - name: Create backup branch before replacing root
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BACKUP_BRANCH="backup/pre-root-replace-${{ inputs.release_tag }}-${GITHUB_RUN_ID}"
+          git switch -c "$BACKUP_BRANCH"
+          git push origin "$BACKUP_BRANCH"
+          echo "BACKUP_BRANCH=$BACKUP_BRANCH" >> "$GITHUB_ENV"
+
+      - name: Replace every tracked root file with release source
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace \
-            :ZalithLauncher:testDebugUnitTest \
-            :ZalithLauncher:assembleDebug \
-            -Darch=arm64
-          mkdir -p release-files
-          APK="$(find ZalithLauncher/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" release-files/NJOL-debug-arm64.apk
 
-      - name: Build universal Debug APK
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./gradlew --no-daemon --stacktrace \
-            :ZalithLauncher:assembleDebug \
-            -Darch=all
-          APK="$(find ZalithLauncher/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' | head -n 1)"
-          test -n "$APK"
-          cp "$APK" release-files/NJOL-debug-universal.apk
+          # Delete the current working-tree contents except .git.
+          # This does not rewrite history; the backup branch above preserves the old tree.
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf -- {} +
+          cp -a /tmp/njol-new-root/. .
 
-      - name: Create exact source archive with license materials
-        shell: bash
-        run: |
-          set -euo pipefail
           test -f LICENSE
-          test -f LICENSE_RU.md
           test -f README.md
-          test -f README_NJOL_RU.md
-          test -f THIRD_PARTY_NOTICES_RU.md
-          test -f RELEASE_RU.md
-          TAG="${GITHUB_REF_NAME:-source-snapshot}"
-          git archive --format=zip --prefix="NJOL-${TAG}/" \
-            -o "release-files/NJOL-Source-${TAG}.zip" HEAD
-          unzip -Z1 "release-files/NJOL-Source-${TAG}.zip" | grep -q 'LICENSE$'
-          unzip -Z1 "release-files/NJOL-Source-${TAG}.zip" | grep -q 'THIRD_PARTY_NOTICES_RU.md$'
+          git add -A
 
-      - name: Generate and verify SHA-256 checksums
+      - name: Commit and push replaced repository root
         shell: bash
         run: |
           set -euo pipefail
-          (cd release-files && sha256sum *.apk *.zip) | tee release-files/NJOL-checksums.txt
-          (cd release-files && sha256sum -c NJOL-checksums.txt)
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: NJOL-${{ github.ref_name }}
-          path: release-files/*
-          if-no-files-found: error
-          compression-level: 0
-
-  publish-prerelease:
-    name: Publish GitHub test prerelease
-    needs: build
-    if: >-
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/debug-v')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish_release == true)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download release files
-        uses: actions/download-artifact@v4
-        with:
-          name: NJOL-${{ github.ref_name }}
-          path: release-files
-
-      - name: Publish GPLv3-compliant test prerelease
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: NJOL ${{ github.ref_name }}
-          prerelease: true
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-          body: |
-            ## NapoleJavaON Launcher — тестовая Debug-сборка
-
-            Это не production-релиз. APK подписаны Debug-ключом и предназначены для тестирования.
-
-            В релиз приложены arm64 и universal APK, точный исходный ZIP этого commit/tag и SHA-256 checksums.
-
-            NJOL — неофициальная изменённая версия GPLv3-проектов Zalith Launcher. Сохранены `LICENSE`, copyright-заголовки, third-party notices и upstream attribution. Проект не является официальным продуктом Zalith Launcher, Mojang, Microsoft или PojavLauncher.
-          files: |
-            release-files/*.apk
-            release-files/*.zip
-            release-files/NJOL-checksums.txt
+          git commit -m "release: replace repository root from ${{ inputs.release_tag }} source"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "The root was replaced from release tag ${{ inputs.release_tag }}."
+          echo "Backup branch: $BACKUP_BRANCH"
+          
