@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'тег релиза v1.0-debug'
+        description: 'Тег релиза (например, v1.0-debug)'
         required: true
         type: string
 
@@ -26,12 +26,14 @@ jobs:
           echo "Скачиваем Source-Code.zip из релиза ${{ github.event.inputs.release_tag }}..."
           gh release download ${{ github.event.inputs.release_tag }} --pattern "Source-Code.zip"
 
-      - name: Extract ZIP file
+      - name: Extract ZIP and remove workflow directory
         run: |
           echo "Распаковываем архив..."
           unzip -o Source-Code.zip -d .
           rm Source-Code.zip
-          echo "Архив распакован, исходный файл удален."
+          # Удаляем папку workflows из распакованного архива, чтобы избежать ошибки прав
+          rm -rf .github/workflows
+          echo "Архив распакован, папка .github/workflows удалена."
 
       - name: Commit and Push changes
         uses: stefanzweifel/git-auto-commit-action@v5
